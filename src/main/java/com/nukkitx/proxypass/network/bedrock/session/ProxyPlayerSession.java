@@ -75,7 +75,7 @@ public class ProxyPlayerSession {
         return new ProxyBatchHandler(upstream, false);
     }
 
-    private void log(Supplier<String> supplier) {
+    public void log(Supplier<String> supplier) {
         if (proxy.getConfiguration().isLoggingPackets()) {
             synchronized (logBuffer) {
                 logBuffer.addLast(supplier.get());
@@ -99,6 +99,7 @@ public class ProxyPlayerSession {
     private class ProxyBatchHandler implements BatchHandler {
         private final BedrockSession session;
         private final String logPrefix;
+        private int count = 0;
 
         private ProxyBatchHandler(BedrockSession session, boolean upstream) {
             this.session = session;
@@ -107,6 +108,7 @@ public class ProxyPlayerSession {
 
         @Override
         public void handle(BedrockSession session, ByteBuf compressed, Collection<BedrockPacket> packets) {
+            ++count;
             boolean packetTesting = ProxyPlayerSession.this.proxy.getConfiguration().isPacketTesting();
             boolean batchHandled = false;
             List<BedrockPacket> unhandled = new ArrayList<>();
@@ -115,7 +117,7 @@ public class ProxyPlayerSession {
                     if (session.isLogging() && log.isTraceEnabled()) {
                         log.trace(this.logPrefix + " {}: {}", session.getAddress(), packet);
                     }
-                    ProxyPlayerSession.this.log(() -> logPrefix + packet.toString());
+                    ProxyPlayerSession.this.log(() -> logPrefix + packet.toString() + count);
                     if (proxy.getConfiguration().isLoggingPackets() &&
                             proxy.getConfiguration().getLogTo().logToConsole) {
                         System.out.println(logPrefix + packet.toString());

@@ -33,6 +33,13 @@ public class Configuration {
     @JsonProperty("ignored-packets")
     private Set<String> ignoredPackets = Collections.emptySet();
 
+    @JsonProperty("check-chunk-data")
+    private boolean checkChunkData = false;
+    @JsonProperty("allow-cache-chunk")
+    private boolean allowCacheChunk = true;
+    @JsonProperty("is-nukkit")
+    private boolean isNukkit = false;
+
     public static Configuration load(Path path) throws IOException {
         try (BufferedReader reader = Files.newBufferedReader(path)) {
             return ProxyPass.YAML_MAPPER.readValue(reader, Configuration.class);

@@ -24,3 +24,10 @@ ignored-packets:
   - "NetworkChunkPublisherUpdatePacket"
   - "ClientCacheBlobStatusPacket"
   - "ClientCacheMissResponsePacket"
+
+# 是否开启区块检查
+check-chunk-data: false
+# 是否允许客户端区块缓存
+allow-cache-chunk: true
+# 服务端是 Nukkit 还是 Apollo/BDS
+is-nukkit: false

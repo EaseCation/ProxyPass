@@ -11,6 +11,7 @@ import com.nimbusds.jose.crypto.factories.DefaultJWSVerifierFactory;
 import com.nimbusds.jwt.SignedJWT;
 import com.nukkitx.protocol.bedrock.BedrockServerSession;
 import com.nukkitx.protocol.bedrock.handler.BedrockPacketHandler;
+import com.nukkitx.protocol.bedrock.packet.ClientCacheStatusPacket;
 import com.nukkitx.protocol.bedrock.packet.LoginPacket;
 import com.nukkitx.protocol.bedrock.packet.PlayStatusPacket;
 import com.nukkitx.protocol.bedrock.util.EncryptionUtils;
@@ -162,5 +163,13 @@ public class UpstreamPacketHandler implements BedrockPacketHandler {
 
             //SkinUtils.saveSkin(proxySession, this.skinData);
         });
+    }
+
+    @Override
+    public boolean handle(ClientCacheStatusPacket packet) {
+        ClientCacheStatusPacket pk = new ClientCacheStatusPacket();
+        pk.setSupported(packet.isSupported() && proxy.getConfiguration().isAllowCacheChunk());
+        this.player.getDownstream().sendPacket(pk);
+        return true;
     }
 }
