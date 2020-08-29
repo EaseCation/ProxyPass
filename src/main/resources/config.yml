@@ -25,9 +25,9 @@ ignored-packets:
   - "ClientCacheBlobStatusPacket"
   - "ClientCacheMissResponsePacket"
 
-# ÊÇ·ñ¿ªÆôÇø¿é¼ì²é
+# æ˜¯å¦å¼€å¯åŒºå—æ£€æŸ¥
 check-chunk-data: false
-# ÊÇ·ñÔÊĞí¿Í»§¶ËÇø¿é»º´æ
+# æ˜¯å¦å…è®¸å®¢æˆ·ç«¯åŒºå—ç¼“å­˜
 allow-cache-chunk: true
-# ·şÎñ¶ËÊÇ Nukkit »¹ÊÇ Apollo/BDS
+# æœåŠ¡ç«¯æ˜¯ Nukkit è¿˜æ˜¯ Apollo/BDS
 is-nukkit: false
