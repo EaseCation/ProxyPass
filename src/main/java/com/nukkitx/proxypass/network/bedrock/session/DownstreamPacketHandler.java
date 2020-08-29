@@ -3,17 +3,17 @@ package com.nukkitx.proxypass.network.bedrock.session;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.nimbusds.jwt.SignedJWT;
+import com.nukkitx.nbt.NBTInputStream;
+import com.nukkitx.nbt.NBTOutputStream;
+import com.nukkitx.nbt.NbtList;
+import com.nukkitx.nbt.NbtMap;
+import com.nukkitx.nbt.NbtType;
 import com.nukkitx.nbt.NbtUtils;
-import com.nukkitx.nbt.stream.LittleEndianDataOutputStream;
-import com.nukkitx.nbt.stream.NBTInputStream;
-import com.nukkitx.nbt.stream.NBTOutputStream;
-import com.nukkitx.nbt.tag.CompoundTag;
-import com.nukkitx.nbt.tag.ListTag;
-import com.nukkitx.nbt.tag.Tag;
+import com.nukkitx.nbt.util.stream.LittleEndianDataOutputStream;
 import com.nukkitx.network.VarInts;
 import com.nukkitx.protocol.bedrock.BedrockClientSession;
-import com.nukkitx.protocol.bedrock.data.ContainerId;
-import com.nukkitx.protocol.bedrock.data.ItemData;
+import com.nukkitx.protocol.bedrock.data.inventory.ContainerId;
+import com.nukkitx.protocol.bedrock.data.inventory.ItemData;
 import com.nukkitx.protocol.bedrock.handler.BedrockPacketHandler;
 import com.nukkitx.protocol.bedrock.packet.*;
 import com.nukkitx.protocol.bedrock.util.EncryptionUtils;
@@ -54,7 +54,7 @@ public class DownstreamPacketHandler implements BedrockPacketHandler {
 
     private final Map<Integer, Integer> legacyToRuntimeId = new HashMap<>();
     //private final Map<Integer, Integer> runtimeIdToLegacy = new HashMap<>();
-    private final Map<Integer, CompoundTag> runtimeIdToState = new HashMap<>();
+    private final Map<Integer, NbtMap> runtimeIdToState = new HashMap<>();
     private final AtomicInteger runtimeIdAllocator = new AtomicInteger(0);
 
     public boolean handle(ServerToClientHandshakePacket packet) {
@@ -75,29 +75,29 @@ public class DownstreamPacketHandler implements BedrockPacketHandler {
     }
 
     public boolean handle(AvailableEntityIdentifiersPacket packet) {
-        proxy.saveNBT("entity_identifiers", packet.getTag());
+        proxy.saveNBT("entity_identifiers", packet.getIdentifiers());
         return false;
     }
 
     public boolean handle(BiomeDefinitionListPacket packet) {
-        proxy.saveNBT("biome_definitions", packet.getTag());
+        proxy.saveNBT("biome_definitions", packet.getDefinitions());
         return false;
     }
 
     public boolean handle(StartGamePacket packet) {
-        ListTag<CompoundTag> tag = packet.getBlockPalette();
+        NbtList<NbtMap> tag = packet.getBlockPalette();
         player.log(tag::toString);
-        List<CompoundTag> palette = tag.getValue();
-        for (CompoundTag state : palette) {
+        List<NbtMap> palette = new ArrayList<>(tag);
+        for (NbtMap state : palette) {
             int runtimeId = runtimeIdAllocator.getAndIncrement();
             runtimeIdToState.put(runtimeId, state);
-            if (state.contains("LegacyStates")) { // Nukkit
-                List<CompoundTag> legacyStates = state.getList("LegacyStates", CompoundTag.class);
+            if (state.containsKey("LegacyStates", NbtType.COMPOUND)) { // Nukkit
+                List<NbtMap> legacyStates = state.getList("LegacyStates", NbtType.COMPOUND);
 
                 //CompoundTag firstState = legacyStates.get(0);
                 //runtimeIdToLegacy.put(runtimeId, firstState.getInt("id") << 6 | firstState.getShort("val"));
 
-                for (CompoundTag legacyState : legacyStates) {
+                for (NbtMap legacyState : legacyStates) {
                     int legacyId = legacyState.getInt("id") << 6 | legacyState.getShort("val");
                     legacyToRuntimeId.put(legacyId, runtimeId);
                 }
@@ -105,16 +105,16 @@ public class DownstreamPacketHandler implements BedrockPacketHandler {
         }
 
         Map<String, Integer> legacyBlocks = new HashMap<>();
-        for (CompoundTag entry : tag.getValue()) {
+        for (NbtMap entry : tag) {
             legacyBlocks.putIfAbsent(entry.getCompound("block").getString("name"), (int) entry.getShort("id"));
         }
 
         proxy.saveJson("legacy_block_ids_unsorted.json", legacyBlocks);
         proxy.saveJson("legacy_block_ids.json", sortMap(legacyBlocks));
         palette = new ArrayList<>(palette);
-        proxy.saveNBT("runtime_block_states_unsorted", new ListTag<>("", CompoundTag.class, palette));
+        proxy.saveNBT("runtime_block_states_unsorted", new NbtList<>(NbtType.COMPOUND, palette));
         palette.sort(Comparator.comparingInt(value -> value.getShort("id")));
-        proxy.saveNBT("runtime_block_states", new ListTag<>("", CompoundTag.class, palette));
+        proxy.saveNBT("runtime_block_states", new NbtList<>(NbtType.COMPOUND, palette));
         BlockPaletteUtils.convertToJson(proxy, palette);
 
         List<DataEntry> itemData = new ArrayList<>();
@@ -148,31 +148,42 @@ public class DownstreamPacketHandler implements BedrockPacketHandler {
         return false;
     }
 
+    private void dumpCreativeItems(ItemData[] contents) {
+        List<CreativeItemEntry> entries = new ArrayList<>();
+        for (ItemData data : contents) {
+            int id = data.getId();
+            Integer damage = data.getDamage() == 0 ? null : (int) data.getDamage();
+
+            NbtMap tag = data.getTag();
+            String tagData = null;
+            if (tag != null) {
+                ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                try (NBTOutputStream stream = new NBTOutputStream(new LittleEndianDataOutputStream(byteArrayOutputStream))) {
+                    stream.writeTag(tag);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+                tagData = Base64.getEncoder().encodeToString(byteArrayOutputStream.toByteArray());
+            }
+            entries.add(new CreativeItemEntry(id, damage, tagData));
+        }
+
+        CreativeItems items = new CreativeItems(entries);
+
+        proxy.saveJson("creative_items.json", items);
+    }
+
+    @Override
+    public boolean handle(CreativeContentPacket packet) {
+        dumpCreativeItems(packet.getEntries().values().toArray(new ItemData[0]));
+        return false;
+    }
+
+    // Pre 1.16 method of Creative Items
     @Override
     public boolean handle(InventoryContentPacket packet) {
         if (packet.getContainerId() == ContainerId.CREATIVE) {
-            List<CreativeItemEntry> entries = new ArrayList<>();
-            for (ItemData data : packet.getContents()) {
-                int id = data.getId();
-                Integer damage = data.getDamage() == 0 ? null : (int) data.getDamage();
-
-                CompoundTag tag = data.getTag();
-                String tagData = null;
-                if (tag != null) {
-                    ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-                    try (NBTOutputStream stream = new NBTOutputStream(new LittleEndianDataOutputStream(byteArrayOutputStream))) {
-                        stream.write(tag);
-                    } catch (IOException e) {
-                        throw new RuntimeException(e);
-                    }
-                    tagData = Base64.getEncoder().encodeToString(byteArrayOutputStream.toByteArray());
-                }
-                entries.add(new CreativeItemEntry(id, damage, tagData));
-            }
-
-            CreativeItems items = new CreativeItems(entries);
-
-            proxy.saveJson("creative_items.json", items);
+            dumpCreativeItems(packet.getContents());
         }
         return false;
     }
@@ -304,7 +315,7 @@ public class DownstreamPacketHandler implements BedrockPacketHandler {
                         }
 
                         if (data.isReadable()) {
-                            List<Tag<?>> tiles = new ArrayList<>();
+                            List<Object> tiles = new ArrayList<>();
                             try (NBTInputStream reader = NbtUtils.createNetworkReader(new ByteBufInputStream(data))) {
                                 while (data.isReadable()) {
                                     tiles.add(reader.readTag());
@@ -404,7 +415,7 @@ public class DownstreamPacketHandler implements BedrockPacketHandler {
                                             }
                                         } else {*/
                                             try (NBTInputStream reader = NbtUtils.createNetworkReader(new ByteBufInputStream(data))) {
-                                                Tag<?> tag = reader.readTag();
+                                                Object tag = reader.readTag();
                                                 //TODO: check
                                                 palette.add(tag);
                                             } catch (Exception e) {
