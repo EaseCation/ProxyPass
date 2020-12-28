@@ -143,7 +143,7 @@ public class DownstreamPacketHandler implements BedrockPacketHandler {
     @Override
     public boolean handle(InventoryContentPacket packet) {
         if (packet.getContainerId() == ContainerId.CREATIVE) {
-            dumpCreativeItems(packet.getContents());
+            dumpCreativeItems(packet.getContents().toArray(new ItemData[0]));
         }
         return false;
     }
