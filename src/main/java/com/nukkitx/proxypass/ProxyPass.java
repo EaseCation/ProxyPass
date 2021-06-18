@@ -43,6 +43,8 @@ public class ProxyPass {
     public static final int PROTOCOL_VERSION = CODEC.getProtocolVersion();
     private static final DefaultPrettyPrinter PRETTY_PRINTER = new DefaultPrettyPrinter();
 
+    public static final int SHIELD_RUNTIME_ID = 356; // Change this when the item palette changes.
+
     static {
         DefaultIndenter indenter = new DefaultIndenter("    ", "\n");
         PRETTY_PRINTER.indentArraysWith(indenter);
